@@ -56,7 +56,7 @@
 static uint8_t
 send_bit(ow_t* ow, uint8_t v) {
     uint8_t b;
-	
+    
     /*
      * To send logical 1 over 1-wire, send 0xFF over UART
      * To send logical 0 over 1-wire, send 0x00 over UART
@@ -734,6 +734,55 @@ ow_search_devices(ow_t* ow, ow_rom_t* rom_id_arr, size_t rom_len, size_t* roms_f
 
     ow_protect(ow, 1);
     res = ow_search_devices_raw(ow, rom_id_arr, rom_len, roms_found);
+    ow_unprotect(ow, 1);
+    return res;
+}
+
+/**
+ * \brief           When only one devide is connected at 1-Wire network, get the family code, the rom id and validate it to CRC
+ * \param[in]       ow: 1-Wire handle
+ * \param[in]       rom_id: Pointer to store the only ROM ID
+ * \return          \ref owOK on success, member of \ref owr_t otherwise
+ */
+owr_t
+ow_read_rom_raw(ow_t* ow, ow_rom_t* rom_id) {
+    owr_t res;
+    uint8_t wr;
+
+    OW_ASSERT("ow != NULL", ow != NULL);
+    OW_ASSERT("rom_id != NULL", rom_id != NULL);
+
+    res = ow_reset_raw(ow);
+    if (res != owOK) {
+        return res;
+    }
+    wr = ow_write_byte_raw(ow, OW_CMD_READROM);
+    if (wr != OW_CMD_READROM) {
+        return owPARERR;
+    }
+    for (size_t i = 0; i < sizeof(rom_id->rom); ++i) {
+        rom_id->rom[i] = ow_read_byte_raw(ow);
+    }
+
+    if (ow_crc(rom_id->rom, sizeof(rom_id->rom)) != 0) {
+        res = owPARERR;
+    }
+
+    return res;
+}
+
+/**
+ * \copydoc         ow_search_devices_raw
+ * \note            This function is thread-safe
+ */
+owr_t
+ow_read_rom(ow_t* ow, ow_rom_t* rom_id) {
+    owr_t res;
+
+    OW_ASSERT("ow != NULL", ow != NULL);
+
+    ow_protect(ow, 1);
+    res = ow_read_rom_raw(ow, rom_id);
     ow_unprotect(ow, 1);
     return res;
 }
